@@ -4,6 +4,162 @@ library(ratesci)
 library(PropCIs)
 library(forestplot)
 
+# [STDvL1.L2.L3] 
+
+
+
+# Analysis - ITT - 12 Months
+
+#data from table 
+
+treatmentLabels <- c('STD','300mg4w',  '300mg2w',    '150mg4w' )
+
+
+
+fx <- function(N.STD, N.NEW, n.STD, n.NEW){
+
+    
+    l.N <- list('N.STD' = N.STD, 'N.NEW' = N.NEW, 'n.STD' = N.STD, 'n.NEW' = N.NEW  )    
+    
+    R.STD <- round(rate[1] *100,1)
+    R.NEW <- round(n.NEW / N.NEW *100,1)
+    
+    l.R     <- list('R.STD' = R.STD, 'R.NEW' = R.NEW  )
+
+    RD <- ratesci::moverci(x1 = n.STD, n1 = N.STD, x2 = n.NEW, n2 = N.NEW, type = "wilson",contrast = 'RD')
+    
+    L  <- RD[1] * 100
+    H  <- RD[3] * 100
+    RD <- RD[2] * 100
+    
+    L.r  <- round(l1, 1)
+    H.r  <- round(h1, 1)
+    RD.r <- round(d1, 1)
+    
+    l.RD <- list('L' = L,'H'= H,'RD'=RD, 'L.r' = L.r,'H.r'= H.r,'RD.r'=RD.r )
+    
+    # store in list container
+    s <- list('RD' = l.RD , 'N' = l.N , 'R'= l.R)
+    
+    return(s)
+
+}
+
+
+
+
+l.N <- list( 'tSTD'     = 29, 
+             't300mg4w' = 28,
+             't300mg2w' = 29, 
+             't150mg2w' = 30)
+
+l.n <- list( 'tSTD'     = 24, 
+             't300mg4w' = 25,
+             't300mg2w' = 23, 
+             't150mg2w' = 24)
+
+l.d <- list(N = l.N, n = l.n)
+
+
+n <- c(24, 25, 23, 24)
+
+
+# [S] STD vs ( [1] 300mg4w, [2]300mg2w, [3]150mg4w )
+
+s <- fx(  N.STD = N[1] ,
+          N.NEW = N[2]+N[3]+N[4],
+          n.STD = n[1],
+          n.NEW = n[2]+n[3]+n[4] )
+
+
+s <- fx(  N.STD = l.d$N$tSTD ,
+          N.NEW = l.d$N$t300mg4w +  l.d$N$t300mg2w + l.d$N$t150mg2w,
+          n.STD = l.d$n$tSTD ,
+          n.NEW = l.d$n$t300mg4w +  l.d$n$t300mg2w + l.d$n$t150mg2w )
+
+
+
+
+  
+r <-    list('Sv123'  = s)   # to add another, r <- c(r, list())
+
+# [S] STD vs (   [2]300mg2w, [3]150mg4w )
+
+s <- fx(  N.STD = N[1] ,
+          N.NEW = N[3]+N[4],
+          n.STD = n[1],
+          n.NEW = n[3]+n[4] )
+
+r <-    list('Sv123'  = s)   # to add another, r <- c(r, list())
+
+
+
+
+# Generate Forest
+
+tabletext<-cbind(
+  c(NA, NA   , "STD vs Any Low   ", "STD vs LOW", "Doran" ),
+  c("% (n)", "STD ", r$Sv123$R$R.STD      , "1"    , "4"     ),
+  c(NA, "NEW", r$Sv123$R$R.NEW    , "5"    , "11"    ),
+  c(NA, "Difference"       , d1.r    , d1.r , d1.r  )) 
+ 
+
+# Cochrane data from the 'rmeta'-package
+cochrane_from_rmeta <- 
+  structure(list(
+    mean  = c(NA, NA, r$Sv123$RD$RD, d1, d1  ), 
+    lower = c(NA, NA, r$Sv123$RD$L, l1, l1  ),
+    upper = c(NA, NA, r$Sv123$RD$H, h1, h1  )),
+    .Names = c("mean", "lower", "upper"), 
+    row.names = c(NA, -5L), 
+    class = "data.frame")
+ 
+forestplot(labeltext = tabletext, 
+           mean = cochrane_from_rmeta,
+           new_page = TRUE,
+           is.summary=c(FALSE,FALSE,rep(FALSE,4)),
+           # clip=c(0.1,2.5), 
+           xlog=FALSE, 
+           col=fpColors(box="royalblue",line="darkblue", summary="royalblue")
+           ,xticks =  c(-15, -10, -5, 0, 5, 10, 15, 20, 25)
+           , ci.vertices = TRUE
+           , xlab = 'Rate Difference'
+           , grid = structure(c(10, 20), 
+                              gp = gpar(lty = 1, col = "#c41019"))
+           ,graph.pos = 4
+           , txt_gp = fpTxtGp(label = list(gpar(fontfamily = "",  cex= 0.8),
+                                           gpar(fontfamily = "", cex= 0.9, col = "#660000"),
+                                           gpar(fontfamily = "",  cex= 0.9),
+                                           gpar(fontfamily = "",  cex= 1)
+           ),
+           ticks = gpar(fontfamily = "", cex= 0.7),
+           xlab  = gpar(fontfamily = "", cex = 0.8)) ,  
+           graphwidth = unit(60, 'mm'),
+           mar =  unit(c(40,1,50,1), 'mm')
+           
+           #b, l, t, r
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # STD vs all.LOW
 ratesci::moverci(x2 = 74, n2 = 87, x1 = 25, n1 = 28, type = "wilson",contrast = 'RD')

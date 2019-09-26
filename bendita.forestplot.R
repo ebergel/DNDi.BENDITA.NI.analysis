@@ -3,317 +3,308 @@ library(epiR)
 library(ratesci)
 library(PropCIs)
 library(forestplot)
-
-# [STDvL1.L2.L3] 
-
-
-
-# Analysis - ITT - 12 Months
-
-#data from table 
-
-treatmentLabels <- c('STD','300mg4w',  '300mg2w',    '150mg4w' )
+library(EQUIVNONINF)
+library(BiasedUrn)
 
 
+#pvalue for non inferiority: no lo uso, es muy dificil de interpretar
+if (FALSE) {
 
-fx <- function(N.STD, N.NEW, n.STD, n.NEW){
+#TESTING STATISTICAL HYPOTHESES OF EQUIVALENCE AND NONINFERIORITY
+#SECOND EDITION STEFAN WELLEK
+# chapter 661
+
+# robhypr(213,106,195,97,.50)   sas
+# pFNCHypergeo(12, 25, 32, 20, 2.5) ex R cran
+
+ # example from book:  da bien!!!
+ x<-BiasedUrn::pFNCHypergeo(x =97 , m1 =106 , m2 =107 , n =195  , odds = 0.5, lower.tail = TRUE)
+
+ BiasedUrn::pFNCHypergeo(x =24 , m1 =29 , m2 =87 , n =96  , odds = 0.58, lower.tail = FALSE)
+ BiasedUrn::pFNCHypergeo(x =24 , m1 =29 , m2 =30 , n =48  , odds = 0.58, lower.tail = FALSE)
+
+# non inferiority margin 83 to 73, OR = 0.58
+ # S v 123
+ BiasedUrn::pFNCHypergeo(x =72 , m1 =96 , m2 =20 , n =87  , odds = 0.58, lower.tail = FALSE)
+ # S v 3
+ BiasedUrn::pFNCHypergeo(x =24 , m1 =48 , m2 =11 , n =30  , odds = 0.58, lower.tail = FALSE)
+ # S v 23
+ BiasedUrn::pFNCHypergeo(x =47 , m1 =71 , m2 =17 , n =59  , odds = 0.58, lower.tail = FALSE)
+ # s v 1
+ BiasedUrn::pFNCHypergeo(x =25 , m1 =49 , m2 =8  , n =28  , odds = 0.58, lower.tail = FALSE)
+ 
+ 
+ # non inferiority margin 83 to 33, OR = 0.36 
+ BiasedUrn::pFNCHypergeo(x =72 , m1 =96 , m2 =20 , n =87  , odds = 0.36, lower.tail = FALSE)
+ BiasedUrn::pFNCHypergeo(x =24 , m1 =48 , m2 =11 , n =30  , odds = 0.36, lower.tail = FALSE) 
+ 
+}
+
+ci <- function(a,b,c){ paste(a, ' [',b, ',' , c, ']', sep = '' )}
+nDec <- function(x, k) trimws(format(round(x, k), nsmall=k)) 
+rn <- function(a,b){paste(  a ,  ' (',  b , ')', sep = '')}
+ 
+N.STD <- 29
+N.NEW <- 87
+n.STD <- 24
+n.NEW <- 72
+niODDS <- 0.58
+
+ 
+
+fx <- function(N.STD, N.NEW, n.STD, n.NEW, isNI = FALSE, niODDS = 0.65){
 
     
-    l.N <- list('N.STD' = N.STD, 'N.NEW' = N.NEW, 'n.STD' = N.STD, 'n.NEW' = N.NEW  )    
+    l.N <- list('N.STD' = N.STD, 'N.NEW' = N.NEW, 'n.STD' = n.STD, 'n.NEW' = n.NEW  )    
+ 
+    R.STD <- n.STD / N.STD * 100
+    R.NEW <- n.NEW / N.NEW * 100 
     
-    R.STD <- round(rate[1] *100,1)
-    R.NEW <- round(n.NEW / N.NEW *100,1)
+    l.R     <- list('R.STD' = nDec(R.STD,1), 'R.NEW' = nDec(R.NEW,1)  ) 
     
-    l.R     <- list('R.STD' = R.STD, 'R.NEW' = R.NEW  )
-
+    # epiR for pValue
+    dat <- matrix(c(n.NEW, N.NEW-n.NEW, n.STD, N.STD-n.STD), nrow = 2, byrow = TRUE)
+    rownames(dat) <- c("New", "STD"); colnames(dat) <- c("PCR(-)", "PCR(+)"); dat
+    t2x2 <- epiR::epi.2by2(dat = as.table(dat), method = "cross.sectional",
+                             conf.level = 0.95, units = 100, outcome = "as.columns")
+    
+    pval <- t2x2$res$chisq.crude$p.value 
+     
+    if (isNI){
+      
+      # p value for non inferiority
+      
+      #BiasedUrn::pFNCHypergeo(x =72 , m1 =96 , m2 =20 , n =87  , odds = 0.58, lower.tail = FALSE)
+      
+      N <- N.STD + N.NEW
+      pval <- BiasedUrn::pFNCHypergeo(  x  = n.NEW , 
+                                        m1 = n.STD + n.NEW , 
+                                        m2 = N - (n.STD + n.NEW)        , 
+                                        n  = N.NEW  , 
+                                        odds = niODDS, 
+                                        lower.tail = FALSE)
+    }
+    
+    
+    if (pval < 0.001){ 
+      pval <- '<0.001' 
+    } else {
+      pval <- nDec(pval, 3)
+    }
+    
+    # ratesci  for RD ci
     RD <- ratesci::moverci(x1 = n.STD, n1 = N.STD, x2 = n.NEW, n2 = N.NEW, type = "wilson",contrast = 'RD')
+ 
     
     L  <- RD[1] * 100
     H  <- RD[3] * 100
     RD <- RD[2] * 100
     
-    L.r  <- round(l1, 1)
-    H.r  <- round(h1, 1)
-    RD.r <- round(d1, 1)
+    L.r  <- nDec(L, 1)
+    H.r  <- nDec(H, 1)
+    RD.r <- nDec(RD, 1)
     
     l.RD <- list('L' = L,'H'= H,'RD'=RD, 'L.r' = L.r,'H.r'= H.r,'RD.r'=RD.r )
     
     # store in list container
-    s <- list('RD' = l.RD , 'N' = l.N , 'R'= l.R)
+    s <- list('RD' = l.RD , 'N' = l.N , 'R'= l.R,  'pval' = pval )
     
     return(s)
 
 }
 
+ 
 
-
-
-l.N <- list( 'tSTD'     = 29, 
-             't300mg4w' = 28,
-             't300mg2w' = 29, 
-             't150mg2w' = 30)
-
-l.n <- list( 'tSTD'     = 24, 
-             't300mg4w' = 25,
-             't300mg2w' = 23, 
-             't150mg2w' = 24)
-
-l.d <- list(N = l.N, n = l.n)
-
-
-n <- c(24, 25, 23, 24)
-
-
-# [S] STD vs ( [1] 300mg4w, [2]300mg2w, [3]150mg4w )
-
-s <- fx(  N.STD = N[1] ,
-          N.NEW = N[2]+N[3]+N[4],
-          n.STD = n[1],
-          n.NEW = n[2]+n[3]+n[4] )
-
-
-s <- fx(  N.STD = l.d$N$tSTD ,
-          N.NEW = l.d$N$t300mg4w +  l.d$N$t300mg2w + l.d$N$t150mg2w,
-          n.STD = l.d$n$tSTD ,
-          n.NEW = l.d$n$t300mg4w +  l.d$n$t300mg2w + l.d$n$t150mg2w )
-
-
-
-
+# fx Generate Forest 
+fx.forest <- function(isNI = TRUE){
   
-r <-    list('Sv123'  = s)   # to add another, r <- c(r, list())
+   showStats <- c(NA       , NA    ,
+    ci( r$Sv123$RD$RD.r, r$Sv123$RD$L.r, r$Sv123$RD$H.r ),
+    ci( r$Sv23$RD$RD.r, r$Sv23$RD$L.r, r$Sv23$RD$H.r ),
+    ci( r$Sv1$RD$RD.r, r$Sv1$RD$L.r, r$Sv1$RD$H.r ),
+    ci( r$Sv2$RD$RD.r, r$Sv2$RD$L.r, r$Sv2$RD$H.r ),
+    ci( r$Sv3$RD$RD.r, r$Sv3$RD$L.r, r$Sv3$RD$H.r ) ) 
+   
+   
+  if (isNI) { 
+  pvals <-    c(NA  , NA ,  NA   , NA   ,   NA   ,    NA  , NA )
+    
+  } else{
+    
+    pvals <- c(NA       , "p value"    ,  r$Sv123$pval   
+      ,  r$Sv23$pval   
+      ,  r$Sv1$pval   
+      ,  r$Sv2$pval   
+      ,  r$Sv3$pval )   
+  }   
+  
+  
+  rates <- 
+  c('Rate'       , "Difference"   
+    , r$Sv123$RD$RD.r 
+    , r$Sv23$RD$RD.r  
+    , r$Sv1$RD$RD.r
+    , r$Sv2$RD$RD.r 
+    , r$Sv3$RD$RD.r)
+  
+ 
+   
+      tabletext  <-  cbind(
+        c(NA, NA   , "(1) 300mg 4w, 300mg 2w, 150mg 4w", 
+          "(2) 300mg 2w, 150mg 4w", 
+          "(3) 300mg 4w" , 
+          '(4) 300mg 2w', 
+          '(5) 150mg 4w '),
+        
+        c('STD', "% (n)"             , rn( r$Sv123$R$R.STD,r$Sv123$N$N.STD)
+          , rn(r$Sv23$R$R.STD  ,r$Sv23$N$N.STD)  
+          , rn(r$Sv1$R$R.STD   ,r$Sv1$N$N.STD)
+          , rn(r$Sv2$R$R.STD   ,r$Sv2$N$N.STD)
+          , rn(r$Sv3$R$R.STD   ,r$Sv3$N$N.STD) ),
+        
+        c("NEW" , "% (n)"               ,rn( r$Sv123$R$R.NEW     ,r$Sv123$N$N.NEW)
+          ,rn( r$Sv23$R$R.NEW 	,r$Sv23$N$N.NEW)  
+          ,rn( r$Sv1$R$R.NEW    	,r$Sv1$N$N.NEW)
+          ,rn( r$Sv2$R$R.NEW 	,r$Sv2$N$N.NEW)
+          ,rn( r$Sv3$R$R.NEW  	,r$Sv3$N$N.NEW) ),
+        
+        showStats, pvals
+        
+        )
+ 
+      
+      
+      # Cochrane data from the 'rmeta'-package
+      cochrane_from_rmeta <- 
+        structure(list(
+          mean  = c(NA, NA, r$Sv123$RD$RD, r$Sv23$RD$RD , r$Sv1$RD$RD, r$Sv2$RD$RD , r$Sv3$RD$RD  ), 
+          lower = c(NA, NA, r$Sv123$RD$L , r$Sv23$RD$L  , r$Sv1$RD$L , r$Sv2$RD$L  , r$Sv3$RD$L),
+          upper = c(NA, NA, r$Sv123$RD$H , r$Sv23$RD$H  , r$Sv1$RD$H , r$Sv2$RD$H  , r$Sv3$RD$H)),
+          .Names = c("mean", "lower", "upper"), 
+          row.names = c(NA, -8L), 
+          class = "data.frame")
+      
+      forestplot(labeltext = tabletext, 
+                 mean = cochrane_from_rmeta,
+                 new_page = TRUE,
+                 is.summary=c(FALSE,FALSE,rep(FALSE,4)),
+                 # clip=c(0.1,2.5), 
+                 xlog=FALSE, 
+                 col=fpColors(box="royalblue",line="darkblue", summary="royalblue")
+                 ,xticks =  c(-25,-20,-15, -10, -5, 0, 5, 10, 15, 20, 25)
+                 , ci.vertices = TRUE
+                 , xlab = 'Rate Difference'
+                  #, grid = structure(c(10, 20), gp = gpar(lty = 1, col = "#c41019"))
+                  ,graph.pos = 4
+                 , txt_gp = fpTxtGp(label = list(gpar(fontfamily = "",  cex= 0.8),
+                                                 gpar(fontfamily = "", cex= 0.8), #, col = "#660000"),
+                                                 gpar(fontfamily = "",  cex= 0.8),
+                                                 gpar(fontfamily = "",  cex= 0.8)
+                 ),
+                 ticks = gpar(fontfamily = "", cex= 0.7),
+                 xlab  = gpar(fontfamily = "", cex = 0.8)) ,  
+                 graphwidth = unit(60, 'mm'),
+                 mar =  unit(c(40,10,50,10), 'mm')
+                 
+                 #b, l, t, r
+      )
+}
 
-# [S] STD vs (   [2]300mg2w, [3]150mg4w )
-
-s <- fx(  N.STD = N[1] ,
-          N.NEW = N[3]+N[4],
-          n.STD = n[1],
-          n.NEW = n[3]+n[4] )
-
-r <-    list('Sv123'  = s)   # to add another, r <- c(r, list())
-
-
-
-
-# Generate Forest
-
-tabletext<-cbind(
-  c(NA, NA   , "STD vs Any Low   ", "STD vs LOW", "Doran" ),
-  c("% (n)", "STD ", r$Sv123$R$R.STD      , "1"    , "4"     ),
-  c(NA, "NEW", r$Sv123$R$R.NEW    , "5"    , "11"    ),
-  c(NA, "Difference"       , d1.r    , d1.r , d1.r  )) 
  
 
-# Cochrane data from the 'rmeta'-package
-cochrane_from_rmeta <- 
-  structure(list(
-    mean  = c(NA, NA, r$Sv123$RD$RD, d1, d1  ), 
-    lower = c(NA, NA, r$Sv123$RD$L, l1, l1  ),
-    upper = c(NA, NA, r$Sv123$RD$H, h1, h1  )),
-    .Names = c("mean", "lower", "upper"), 
-    row.names = c(NA, -5L), 
-    class = "data.frame")
- 
-forestplot(labeltext = tabletext, 
-           mean = cochrane_from_rmeta,
-           new_page = TRUE,
-           is.summary=c(FALSE,FALSE,rep(FALSE,4)),
-           # clip=c(0.1,2.5), 
-           xlog=FALSE, 
-           col=fpColors(box="royalblue",line="darkblue", summary="royalblue")
-           ,xticks =  c(-15, -10, -5, 0, 5, 10, 15, 20, 25)
-           , ci.vertices = TRUE
-           , xlab = 'Rate Difference'
-           , grid = structure(c(10, 20), 
-                              gp = gpar(lty = 1, col = "#c41019"))
-           ,graph.pos = 4
-           , txt_gp = fpTxtGp(label = list(gpar(fontfamily = "",  cex= 0.8),
-                                           gpar(fontfamily = "", cex= 0.9, col = "#660000"),
-                                           gpar(fontfamily = "",  cex= 0.9),
-                                           gpar(fontfamily = "",  cex= 1)
-           ),
-           ticks = gpar(fontfamily = "", cex= 0.7),
-           xlab  = gpar(fontfamily = "", cex = 0.8)) ,  
-           graphwidth = unit(60, 'mm'),
-           mar =  unit(c(40,1,50,1), 'mm')
-           
-           #b, l, t, r
-)
+
+fx.runAnalysis <- function(isNI = TRUE){
+  
+  
+      if (isNI) { 
+        
+        # ITT OUTCOME PCR AT 12 month data
+        
+        l.N <- list( 'tSTD'     = 29, 
+                     't300mg4w' = 28,
+                     't300mg2w' = 29, 
+                     't150mg2w' = 30)
+        
+        l.n <- list( 'tSTD'     = 24, 
+                     't300mg4w' = 25,
+                     't300mg2w' = 23, 
+                     't150mg2w' = 24) 
+        
+        l.d <- list(N = l.N, n = l.n)
+        
+      } else {
+        
+        # SAFETY - any TEAE leading to discontinuation
+        
+        l.N <- list( 'tSTD'     = 30, 
+                     't300mg4w' = 30,
+                     't300mg2w' = 30, 
+                     't150mg2w' = 30)
+        
+        l.n <- list( 'tSTD'     = 6, 
+                     't300mg4w' = 1,
+                     't300mg2w' = 0, 
+                     't150mg2w' = 1)
+        
+        l.d <- list(N = l.N, n = l.n) 
+        
+      }
+        
+        
+        
+      # [S] STD vs ( [1] 300mg4w, [2]300mg2w, [3]150mg4w )
+      
+      l.Sv123 <- fx(  N.STD = l.d$N$tSTD , 
+                      n.STD = l.d$n$tSTD ,    
+                      N.NEW = l.d$N$t300mg4w +  l.d$N$t300mg2w + l.d$N$t150mg2w,
+                      n.NEW = l.d$n$t300mg4w +  l.d$n$t300mg2w + l.d$n$t150mg2w )
+        
+       
+      
+      # [S] STD vs (   [2]300mg2w, [3]150mg4w )
+      
+      l.Sv23 <- fx(  N.STD = l.d$N$tSTD ,
+                     n.STD = l.d$n$tSTD ,
+                     N.NEW = l.d$N$t300mg2w + l.d$N$t150mg2w,            
+                     n.NEW = l.d$n$t300mg2w + l.d$n$t150mg2w )
+       
+      # [S] STD vs ( [1] 300mg4w  )
+      
+      l.Sv1 <- fx(  N.STD = l.d$N$tSTD ,
+                    n.STD = l.d$n$tSTD ,            
+                    N.NEW = l.d$N$t300mg4w  ,
+                    n.NEW = l.d$n$t300mg4w   )
+      
+      
+      # [S] STD vs (   [2]300mg2w )
+      
+      l.Sv2  <- fx(   N.STD =    l.d$N$tSTD ,
+                      n.STD =    l.d$n$tSTD ,            
+                      N.NEW =    l.d$N$t300mg2w  ,
+                      n.NEW =    l.d$n$t300mg2w   )
+      
+      # [S] STD vs (  [3]150mg4w )
+      
+      l.Sv3 <- fx(    N.STD =  l.d$N$tSTD ,
+                      n.STD =  l.d$n$tSTD ,            
+                      N.NEW =  l.d$N$t150mg2w,
+                      n.NEW =  l.d$n$t150mg2w )
+      
+      
+      # set Container
+      
+      r <-    list('Sv123'  = l.Sv123,
+                   'Sv23'   = l.Sv23,
+                   'Sv1'    = l.Sv1 ,
+                   'Sv2'    = l.Sv2 ,
+                   'Sv3'    = l.Sv3  )  
+
+}
 
 
+isNI <- FALSE
+fx.runAnalysis(isNI = isNI)
+fx.forest(isNI = isNI)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# STD vs all.LOW
-ratesci::moverci(x2 = 74, n2 = 87, x1 = 25, n1 = 28, type = "wilson",contrast = 'RD')
-ratesci::moverci(x2 = 74, n2 = 87, x1 = 25, n1 = 28, type = "wilson",contrast = 'RR')
-
-dat <- matrix(c(74,13,25,3), nrow = 2, byrow = TRUE)
-rownames(dat) <- c("New", "STD"); colnames(dat) <- c("PCR(-)", "PCR(+)"); dat
-res.01 <- epiR::epi.2by2(dat = as.table(dat), method = "cross.sectional",
-                         conf.level = 0.95, units = 100, outcome = "as.columns")
-RR.95CI <- res.01$res$RR.crude.score
-RR.95CI 
-res.01
-
-# FOR comparison with table - STS vs PLACEBO
-ratesci::moverci(x1 = 1, n1 = 30, x2 = 25, n2 = 28, type = "wilson",contrast = 'RD')
-ratesci::moverci(x1 = 1, n1 = 30, x2 = 25, n2 = 28, type = "wilson",contrast = 'RR')
-
-
-
-#---------------------------------
-# WORKING WITH THE NEGATIVE OUTCOME - FAILURE
-
-
-# STD vs all.LOW
-ratesci::moverci(x1 = 13, n1 = 87, x2 = 3, n2 = 28, type = "wilson",contrast = 'RD')
-ratesci::moverci(x1 = 13, n1 = 87, x2 = 3, n2 = 28, contrast = 'RD')
-ratesci::scoreci(x1 = 13, n1 = 87, x2 = 3, n2 = 28, contrast = 'RD')
-ratesci::scoreci(x1 = 13, n1 = 87, x2 = 3, n2 = 28, contrast = 'RD', cc = TRUE)
-
-ratesci::moverci(x1 = 13, n1 = 87, x2 = 3, n2 = 28, type = "wilson",contrast = 'RR')
-
-dat <- matrix(c(13,74,3,25), nrow = 2, byrow = TRUE)
-rownames(dat) <- c("New", "STD"); colnames(dat) <- c("PCR(-)", "PCR(+)"); dat
-res.01 <- epiR::epi.2by2(dat = as.table(dat), method = "cross.sectional",
-                         conf.level = 0.95, units = 100, outcome = "as.columns")
-RR.95CI <- res.01$res$RR.crude.score
-RR.95CI 
-res.01
-
-# FOR comparison with table - STS vs PLACEBO
-ratesci::moverci(x1 = 1, n1 = 30, x2 = 25, n2 = 28, type = "wilson",contrast = 'RD')
-ratesci::moverci(x1 = 1, n1 = 30, x2 = 25, n2 = 28, type = "wilson",contrast = 'RR')
-
-
-
-
-
-
-
-# Cochrane data from the 'rmeta'-package
-cochrane_from_rmeta <- 
-  structure(list(
-    mean  = c(NA, NA, 0.578, 0.165, 0.246, 0.700, 0.348, 0.139, 1.017, NA, 0.531), 
-    lower = c(NA, NA, 0.372, 0.018, 0.072, 0.333, 0.083, 0.016, 0.365, NA, 0.386),
-    upper = c(NA, NA, 0.898, 1.517, 0.833, 1.474, 1.455, 1.209, 2.831, NA, 0.731)),
-    .Names = c("mean", "lower", "upper"), 
-    row.names = c(NA, -11L), 
-    class = "data.frame")
-
-tabletext<-cbind(
-  c("", "Study", "Auckland", "Block", 
-    "Doran", "Gamsu", "Morrison", "Papageorgiou", 
-    "Tauesch", NA, "Summary"),
-  c("Deaths", "(steroid)", "36", "1", 
-    "4", "14", "3", "1", 
-    "8", NA, NA),
-  c("Deaths", "(placebo)", "60", "5", 
-    "11", "20", "7", "7", 
-    "10", NA, NA),
-  c("", "OR", "0.58", "0.16", 
-    "0.25", "0.70", "0.35", "0.14", 
-    "1.02", NA, "0.53"))
-
-forestplot(tabletext, 
-           cochrane_from_rmeta,new_page = TRUE,
-           is.summary=c(TRUE,TRUE,rep(FALSE,8),TRUE),
-           clip=c(0.1,2.5), 
-           xlog=TRUE, 
-           col=fpColors(box="royalblue",line="darkblue", summary="royalblue"))
-
-
-
-s <- 100
-l1 <- -0.1331049 *s
-h1 <- 0.1560159  *s
-d1 <- 0.04228243 *s
-
- 
-l1.r <- round(l1, 1)
-h1.r <- round(h1, 1)
-d1.r <- round(d1, 1)
- 
-
-tabletext<-cbind(
-  c(NA, NA   , "STD vs Any Low   ", "STD vs LOW", "Doran" ),
-  c("% (n)", "STD ", "89.2 (5)"      , "1"    , "4"     ),
-  c(NA, "NEW", "85.1"      , "5"    , "11"    ),
-  c(NA, "Difference"       , d1.r    , d1.r , d1.r  )) 
-
-
-
-
-# Cochrane data from the 'rmeta'-package
-cochrane_from_rmeta <- 
-  structure(list(
-    mean  = c(NA, NA, d1, d1, d1  ), 
-    lower = c(NA, NA, l1, l1, l1  ),
-    upper = c(NA, NA, h1, h1, h1  )),
-    .Names = c("mean", "lower", "upper"), 
-    row.names = c(NA, -5L), 
-    class = "data.frame")
-
-
-
-forestplot(labeltext = tabletext, 
-           mean = cochrane_from_rmeta,
-           new_page = TRUE,
-           is.summary=c(FALSE,FALSE,rep(FALSE,4)),
-          # clip=c(0.1,2.5), 
-           xlog=FALSE, 
-           col=fpColors(box="royalblue",line="darkblue", summary="royalblue")
-          ,xticks =  c(-15, -10, -5, 0, 5, 10, 15, 20, 25)
-          , ci.vertices = TRUE
-          , xlab = 'Rate Difference'
-          , grid = structure(c(10, 20), 
-                             gp = gpar(lty = 1, col = "#c41019"))
-           ,graph.pos = 4
-          , txt_gp = fpTxtGp(label = list(gpar(fontfamily = "",  cex= 0.8),
-                                          gpar(fontfamily = "", cex= 0.9, col = "#660000"),
-                                          gpar(fontfamily = "",  cex= 0.9),
-                                          gpar(fontfamily = "",  cex= 1)
-                                          ),
-                             ticks = gpar(fontfamily = "", cex= 0.7),
-                             xlab  = gpar(fontfamily = "", cex = 0.8)) ,  
-          graphwidth = unit(60, 'mm'),
-          mar =  unit(c(40,1,50,1), 'mm')
-          
-          #b, l, t, r
-          )
-
-
- 
-forestplot(tabletext, 
-           legend_args = fpLegend(pos = list(x=.85, y=0.25), 
-                                  gp=gpar(col="#CCCCCC", fill="#F9F9F9")),
-           legend = c("Sweden", "Denmark"),
-           fn.ci_norm = c(fpDrawNormalCI, fpDrawCircleCI),
-           boxsize = .25, # We set the box size to better visualize the type
-           line.margin = .1, # We need to add this to avoid crowding
-           mean = cbind(HRQoL$Sweden[, "coef"], HRQoL$Denmark[, "coef"]),
-           lower = cbind(HRQoL$Sweden[, "lower"], HRQoL$Denmark[, "lower"]),
-           upper = cbind(HRQoL$Sweden[, "upper"], HRQoL$Denmark[, "upper"]),
-           clip =c(-.125, 0.075),
-           col=fpColors(box=c("blue", "darkred")),
-           xlab="EQ-5D index")
 
 
